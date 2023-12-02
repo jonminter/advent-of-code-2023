@@ -72,17 +72,20 @@ fn main() {
 #[cfg(test)]
 mod test {
     const TEST_CASES: [(&str, u32); 12] = [
+        // PART 1
         ("1abc2", 12),
         ("pqr3stu8vwx", 38),
         ("a1b2c3d4e5f", 15),
         ("treb7uchet", 77),
         ("two1nine", 29),
+        // PART 2
         ("eightwothree", 83),
         ("abcone2threexyz", 13),
         ("xtwone3four", 24),
         ("4nineeightseven2", 42),
         ("zoneight234", 14),
         ("7pqrstsixteen", 76),
+        // EDGE CASES
         ("twone", 21),
     ];
 
