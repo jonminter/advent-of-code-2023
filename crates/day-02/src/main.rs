@@ -1,14 +1,19 @@
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
-struct BallBag {
-    red_balls: u32,
-    green_balls: u32,
-    blue_balls: u32,
+struct CubeBag {
+    red_cubes: u32,
+    green_cubes: u32,
+    blue_cubes: u32,
+}
+impl CubeBag {
+    fn power(&self) -> u32 {
+        self.red_cubes * self.green_cubes * self.blue_cubes
+    }
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-enum BallColor {
+enum CubeColor {
     Red,
     Green,
     Blue,
@@ -16,55 +21,55 @@ enum BallColor {
 
 #[derive(Debug, PartialEq)]
 struct GameTurn {
-    balls_drawn: HashMap<BallColor, u32>,
+    cubes_drawn: HashMap<CubeColor, u32>,
 }
 impl GameTurn {
     fn new() -> Self {
         GameTurn {
-            balls_drawn: HashMap::new(),
+            cubes_drawn: HashMap::new(),
         }
     }
 
-    fn with_red(mut self, red_balls: u32) -> Result<Self, String> {
-        match self.balls_drawn.get(&BallColor::Red) {
+    fn with_red(mut self, red_cubes: u32) -> Result<Self, String> {
+        match self.cubes_drawn.get(&CubeColor::Red) {
             None => {
-                self.balls_drawn.insert(BallColor::Red, red_balls);
+                self.cubes_drawn.insert(CubeColor::Red, red_cubes);
                 Ok(self)
             }
-            Some(_) => Err("Already set number of red balls drawn this turn".to_string()),
+            Some(_) => Err("Already set number of red cubes drawn this turn".to_string()),
         }
     }
 
-    fn with_green(mut self, green_balls: u32) -> Result<Self, String> {
-        match self.balls_drawn.get(&BallColor::Green) {
+    fn with_green(mut self, green_cubes: u32) -> Result<Self, String> {
+        match self.cubes_drawn.get(&CubeColor::Green) {
             None => {
-                self.balls_drawn.insert(BallColor::Green, green_balls);
+                self.cubes_drawn.insert(CubeColor::Green, green_cubes);
                 Ok(self)
             }
-            Some(_) => Err("Already set number of green balls drawn this turn".to_string()),
+            Some(_) => Err("Already set number of green cubes drawn this turn".to_string()),
         }
     }
 
-    fn with_blue(mut self, blue_balls: u32) -> Result<Self, String> {
-        match self.balls_drawn.get(&BallColor::Blue) {
+    fn with_blue(mut self, blue_cubes: u32) -> Result<Self, String> {
+        match self.cubes_drawn.get(&CubeColor::Blue) {
             None => {
-                self.balls_drawn.insert(BallColor::Blue, blue_balls);
+                self.cubes_drawn.insert(CubeColor::Blue, blue_cubes);
                 Ok(self)
             }
-            Some(_) => Err("Already set number of blue balls drawn this turn".to_string()),
+            Some(_) => Err("Already set number of blue cubes drawn this turn".to_string()),
         }
     }
 
     fn num_red_drawn(&self) -> u32 {
-        *self.balls_drawn.get(&BallColor::Red).unwrap_or(&0)
+        *self.cubes_drawn.get(&CubeColor::Red).unwrap_or(&0)
     }
 
     fn num_green_drawn(&self) -> u32 {
-        *self.balls_drawn.get(&BallColor::Green).unwrap_or(&0)
+        *self.cubes_drawn.get(&CubeColor::Green).unwrap_or(&0)
     }
 
     fn num_blue_drawn(&self) -> u32 {
-        *self.balls_drawn.get(&BallColor::Blue).unwrap_or(&0)
+        *self.cubes_drawn.get(&CubeColor::Blue).unwrap_or(&0)
     }
 }
 
@@ -74,7 +79,7 @@ struct Game {
     turns: Vec<GameTurn>,
 }
 impl Game {
-    fn is_possible_with_bag(&self, ball_bag: &BallBag) -> bool {
+    fn is_possible_with_bag(&self, bag: &CubeBag) -> bool {
         let mut max_red_drawn = 0;
         let mut max_green_drawn = 0;
         let mut max_blue_drawn = 0;
@@ -83,9 +88,25 @@ impl Game {
             max_green_drawn = max_green_drawn.max(turn.num_green_drawn());
             max_blue_drawn = max_blue_drawn.max(turn.num_blue_drawn());
         }
-        ball_bag.red_balls >= max_red_drawn
-            && ball_bag.green_balls >= max_green_drawn
-            && ball_bag.blue_balls >= max_blue_drawn
+        bag.red_cubes >= max_red_drawn
+            && bag.green_cubes >= max_green_drawn
+            && bag.blue_cubes >= max_blue_drawn
+    }
+
+    fn min_cube_bag(&self) -> CubeBag {
+        let mut max_red_drawn = 0;
+        let mut max_green_drawn = 0;
+        let mut max_blue_drawn = 0;
+        for turn in &self.turns {
+            max_red_drawn = max_red_drawn.max(turn.num_red_drawn());
+            max_green_drawn = max_green_drawn.max(turn.num_green_drawn());
+            max_blue_drawn = max_blue_drawn.max(turn.num_blue_drawn());
+        }
+        CubeBag {
+            red_cubes: max_red_drawn,
+            green_cubes: max_green_drawn,
+            blue_cubes: max_blue_drawn,
+        }
     }
 }
 
@@ -93,31 +114,31 @@ fn turn_parse_error_msg(game_num: usize, turn_num: usize, msg: &str) -> String {
     format!("GAME {}, TURN {}: {}", game_num, turn_num + 1, msg)
 }
 
-fn parse_num_balls_and_color(
+fn parse_num_cubes_and_color(
     game_number: usize,
     turn_number: usize,
-    balls_drawn: &str,
+    cubes_drawn: &str,
 ) -> Result<(u32, &str), String> {
-    let (num_balls, color) = balls_drawn.split_once(' ').ok_or_else(|| {
+    let (num_cubes, color) = cubes_drawn.split_once(' ').ok_or_else(|| {
         turn_parse_error_msg(
             game_number,
             turn_number,
-            "Expected a space separating number of balls and color",
+            "Expected a space separating number of cubes and color",
         )
     })?;
 
-    let num_balls = num_balls.parse::<u32>().map_err(|_| {
+    let num_cubes = num_cubes.parse::<u32>().map_err(|_| {
         turn_parse_error_msg(
             game_number,
             turn_number,
             &format!(
-                "Failed to parse number of balls in turn for color {}",
+                "Failed to parse number of cubes in turn for color {}",
                 color
             ),
         )
     })?;
 
-    Ok((num_balls, color))
+    Ok((num_cubes, color))
 }
 
 fn parse_turn_from_str(
@@ -125,23 +146,23 @@ fn parse_turn_from_str(
     turn_number: usize,
     turn_to_parse: &str,
 ) -> Result<GameTurn, String> {
-    let balls_drawn_to_parse = turn_to_parse.split(", ");
+    let cubes_drawn_to_parse = turn_to_parse.split(", ");
     let mut turn = GameTurn::new();
 
-    for balls_drawn in balls_drawn_to_parse {
-        let (num_balls, color) = parse_num_balls_and_color(game_number, turn_number, balls_drawn)?;
+    for cubes_drawn in cubes_drawn_to_parse {
+        let (num_cubes, color) = parse_num_cubes_and_color(game_number, turn_number, cubes_drawn)?;
 
         if color == "red" {
             turn = turn
-                .with_red(num_balls)
+                .with_red(num_cubes)
                 .map_err(|msg| turn_parse_error_msg(game_number, turn_number, &msg))?;
         } else if color == "green" {
             turn = turn
-                .with_green(num_balls)
+                .with_green(num_cubes)
                 .map_err(|msg| turn_parse_error_msg(game_number, turn_number, &msg))?;
         } else if color == "blue" {
             turn = turn
-                .with_blue(num_balls)
+                .with_blue(num_cubes)
                 .map_err(|msg| turn_parse_error_msg(game_number, turn_number, &msg))?;
         } else {
             return Err(format!(
@@ -181,12 +202,13 @@ fn parse_game_from_str(game_str: &str) -> Result<Game, String> {
 }
 
 fn main() {
-    let mut sum = 0;
+    let mut sum_of_possible_games = 0;
+    let mut sum_of_min_cube_bag_powers = 0;
 
-    let ball_bag = BallBag {
-        red_balls: 12,
-        green_balls: 13,
-        blue_balls: 14,
+    let bag = CubeBag {
+        red_cubes: 12,
+        green_cubes: 13,
+        blue_cubes: 14,
     };
 
     for (line_num, line_res) in std::io::stdin().lines().enumerate() {
@@ -194,32 +216,37 @@ fn main() {
         let game = parse_game_from_str(&line)
             .unwrap_or_else(|_| panic!("LINE {}: Failed to parse line!", line_num));
 
-        if game.is_possible_with_bag(&ball_bag) {
-            sum += game.number;
+        if game.is_possible_with_bag(&bag) {
+            sum_of_possible_games += game.number;
         }
+        sum_of_min_cube_bag_powers += game.min_cube_bag().power();
     }
 
-    println!("Sum: {}", sum);
+    println!("Sum of possible games: {}", sum_of_possible_games);
+    println!(
+        "Sum of powers of min cube bags: {}",
+        sum_of_min_cube_bag_powers,
+    );
 }
 
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
 
-    use crate::{BallColor, Game, GameTurn};
+    use crate::{CubeColor, Game, GameTurn};
 
-    fn game_turn(red_balls: u32, green_balls: u32, blue_balls: u32) -> GameTurn {
-        let mut balls_drawn = HashMap::new();
-        if red_balls > 0 {
-            balls_drawn.insert(BallColor::Red, red_balls);
+    fn game_turn(red_cubes: u32, green_cubes: u32, blue_cubes: u32) -> GameTurn {
+        let mut cubes_drawn = HashMap::new();
+        if red_cubes > 0 {
+            cubes_drawn.insert(CubeColor::Red, red_cubes);
         }
-        if green_balls > 0 {
-            balls_drawn.insert(BallColor::Green, green_balls);
+        if green_cubes > 0 {
+            cubes_drawn.insert(CubeColor::Green, green_cubes);
         }
-        if blue_balls > 0 {
-            balls_drawn.insert(BallColor::Blue, blue_balls);
+        if blue_cubes > 0 {
+            cubes_drawn.insert(CubeColor::Blue, blue_cubes);
         }
-        GameTurn { balls_drawn }
+        GameTurn { cubes_drawn }
     }
 
     fn get_test_cases() -> Vec<(String, Game)> {
@@ -281,19 +308,34 @@ mod test {
             .map(|(input_line, _)| input_line.to_string())
             .collect();
 
-        let ball_bag = super::BallBag {
-            red_balls: 12,
-            green_balls: 13,
-            blue_balls: 14,
+        let bag = super::CubeBag {
+            red_cubes: 12,
+            green_cubes: 13,
+            blue_cubes: 14,
         };
 
         let mut sum = 0;
         for input_line in input_lines {
             let game = super::parse_game_from_str(&input_line).unwrap();
-            if game.is_possible_with_bag(&ball_bag) {
+            if game.is_possible_with_bag(&bag) {
                 sum += game.number;
             }
         }
         assert_eq!(8, sum);
+    }
+
+    #[test]
+    fn test_sum_of_powers_is_correct() {
+        let input_lines: Vec<String> = get_test_cases()
+            .iter()
+            .map(|(input_line, _)| input_line.to_string())
+            .collect();
+
+        let mut sum = 0;
+        for input_line in input_lines {
+            let game = super::parse_game_from_str(&input_line).unwrap();
+            sum += game.min_cube_bag().power();
+        }
+        assert_eq!(2286, sum);
     }
 }
