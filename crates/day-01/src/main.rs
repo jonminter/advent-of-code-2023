@@ -4,6 +4,7 @@ const BASE_10: u32 = 10;
 const DIGIT_WORDS: [&str; 9] = [
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
 ];
+const MAX_DIGIT_WORK_LEN: usize = 5;
 
 enum DigitsRead {
     NoDigits,
@@ -33,17 +34,22 @@ impl DigitsRead {
 }
 
 fn get_two_digit_number_from_line(line_str: &str) -> Result<u32, String> {
-    let mut buf = String::new();
     let mut digits_read = DigitsRead::NoDigits;
-    for c in line_str.chars() {
+    for (i, c) in line_str.chars().enumerate() {
         if c.is_digit(BASE_10) {
             digits_read = digits_read.push_digit(c.to_digit(BASE_10).unwrap());
             continue;
         }
 
-        buf.push(c);
+        let slice_start = if i >= MAX_DIGIT_WORK_LEN {
+            i - MAX_DIGIT_WORK_LEN
+        } else {
+            0
+        };
+        let slice_end = i + 1;
+
         for (digit_minus_one, digit_word) in DIGIT_WORDS.iter().enumerate() {
-            if buf.ends_with(digit_word) {
+            if *&line_str[slice_start..slice_end].ends_with(digit_word) {
                 digits_read = digits_read.push_digit(digit_minus_one as u32 + 1);
                 break;
             }
@@ -62,8 +68,6 @@ fn main() {
         let two_digit_num = get_two_digit_number_from_line(&line)
             .expect(format!("LINE {}: Failed to parse line!", line_num).as_str());
         sum += two_digit_num;
-
-        println!("Line {}: {} -> {}", line_num, line, two_digit_num);
     }
 
     println!("Sum: {}", sum);
