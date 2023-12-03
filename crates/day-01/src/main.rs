@@ -49,7 +49,7 @@ fn get_two_digit_number_from_line(line_str: &str) -> Result<u32, String> {
         let slice_end = i + 1;
 
         for (digit_minus_one, digit_word) in DIGIT_WORDS.iter().enumerate() {
-            if *&line_str[slice_start..slice_end].ends_with(digit_word) {
+            if line_str[slice_start..slice_end].ends_with(digit_word) {
                 digits_read = digits_read.push_digit(digit_minus_one as u32 + 1);
                 break;
             }
@@ -64,9 +64,9 @@ fn main() {
     let mut sum = 0;
 
     for (line_num, line_res) in lines.enumerate() {
-        let line = line_res.expect(format!("LINE {}: Failed to read line!", line_num).as_str());
+        let line = line_res.unwrap_or_else(|_| panic!("LINE {}: Failed to read line!", line_num));
         let two_digit_num = get_two_digit_number_from_line(&line)
-            .expect(format!("LINE {}: Failed to parse line!", line_num).as_str());
+            .unwrap_or_else(|_| panic!("LINE {}: Failed to parse line!", line_num));
         sum += two_digit_num;
     }
 
