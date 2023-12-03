@@ -4,7 +4,7 @@ const BASE_10: u32 = 10;
 const DIGIT_WORDS: [&str; 9] = [
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
 ];
-const MAX_DIGIT_WORK_LEN: usize = 5;
+const MAX_DIGIT_WORD_LEN: usize = 5;
 
 enum DigitsRead {
     NoDigits,
@@ -41,8 +41,8 @@ fn get_two_digit_number_from_line(line_str: &str) -> Result<u32, String> {
             continue;
         }
 
-        let slice_start = if i >= MAX_DIGIT_WORK_LEN {
-            i - MAX_DIGIT_WORK_LEN
+        let slice_start = if i >= MAX_DIGIT_WORD_LEN {
+            i - MAX_DIGIT_WORD_LEN
         } else {
             0
         };
