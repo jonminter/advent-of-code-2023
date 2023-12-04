@@ -1,4 +1,8 @@
-use std::{collections::HashSet, iter::Peekable, ops::Deref};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::Peekable,
+    ops::Deref,
+};
 
 struct CharAt {
     column: usize,
@@ -31,6 +35,13 @@ impl Card {
             }
         }
         points
+    }
+
+    fn matching_number_count(&self) -> usize {
+        self.card_numbers
+            .iter()
+            .filter(|card_number| self.winning_numbers.contains(card_number))
+            .count()
     }
 }
 
@@ -175,14 +186,66 @@ fn parse_card_line(line_number: usize, line: &str) -> Result<Card, String> {
     })
 }
 
-fn main() {
-    let mut card_points = 0;
-    for (line_num, line) in std::io::stdin().lines().enumerate() {
-        let line = line.unwrap();
-        let card = parse_card_line(line_num, &line).expect("Failed to parse card line");
-        card_points += card.points();
+struct PointsWon(u32);
+impl Deref for PointsWon {
+    type Target = u32;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
-    println!("{}", card_points);
+}
+
+struct CardsWon(u32);
+impl Deref for CardsWon {
+    type Target = u32;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+fn calculate_points_and_total_cards(
+    cards: &mut impl Iterator<Item = Result<Card, String>>,
+) -> Result<(PointsWon, CardsWon), String> {
+    let mut num_copies_won = HashMap::new();
+
+    let mut total_cards = 0;
+    let mut total_points = 0;
+    for card in cards {
+        let card = card?;
+
+        let num_copies_of_this_card = *num_copies_won.entry(card.number).or_insert(0) + 1;
+        let num_matching_numbers = card.matching_number_count();
+
+        if num_matching_numbers > 0 {
+            for i in 1..=num_matching_numbers {
+                num_copies_won
+                    .entry(card.number + i as u32)
+                    .and_modify(|n| *n += num_copies_of_this_card)
+                    .or_insert(num_copies_of_this_card);
+            }
+        }
+        total_cards += num_copies_of_this_card;
+        total_points += card.points();
+    }
+    Ok((
+        PointsWon(total_points),
+        CardsWon(total_cards.try_into().unwrap()),
+    ))
+}
+
+fn main() {
+    let mut cards = std::io::stdin()
+        .lines()
+        .enumerate()
+        .map(|(line_num, line)| {
+            let line = line.unwrap();
+            parse_card_line(line_num, &line)
+                .map_err(|e| format!("Error parsing line {}: {}", line_num, e))
+        });
+
+    let (points_won, cards_won) =
+        calculate_points_and_total_cards(&mut cards).expect("Failed to calculate cards won");
+    println!("Points won: {}", *points_won);
+    println!("Cards won: {}", *cards_won);
 }
 
 #[cfg(test)]
@@ -265,5 +328,14 @@ mod test {
             .collect::<Vec<_>>();
         let points_sum = cards.iter().map(|card| card.points()).sum::<u32>();
         assert_eq!(points_sum, 13);
+    }
+
+    #[test]
+    fn test_cards_won() {
+        let mut cards = get_test_cases().into_iter().map(|(_, card)| Ok(card));
+
+        let (_, cards_won) = super::calculate_points_and_total_cards(&mut cards).unwrap();
+
+        assert_eq!(*cards_won, 30);
     }
 }
