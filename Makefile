@@ -12,3 +12,9 @@ day-03:
 
 dev-day-03:
 	cd crates/day-03 && cargo watch -x check -x test
+
+day-04:
+	cat inputs/day-04.txt | cargo run --bin day-04
+
+dev-day-04:
+	cd crates/day-04 && cargo watch -x check -x test

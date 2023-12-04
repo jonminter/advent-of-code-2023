@@ -41,7 +41,7 @@ fn get_two_digit_number_from_line(line_str: &str) -> Result<u32, String> {
             continue;
         }
 
-        let slice_start = if i >= MAX_DIGIT_WORD_LEN {
+        let slice_start = if i > MAX_DIGIT_WORD_LEN {
             i - MAX_DIGIT_WORD_LEN
         } else {
             0
