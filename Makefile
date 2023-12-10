@@ -5,4 +5,4 @@ run:
 	cat inputs/day-$$(printf "%02d" $(day)).txt | cargo run --bin day-$$(printf "%02d" $(day))
 
 dev:
-	cd crates/day-$$(printf "%02d" $(day)) && cargo watch -x check -x test -- sh -c "cat ../../inputs/day-$$(printf "%02d" $(day)).txt | cargo run --bin day-$$(printf "%02d" $(day))"
+	cd crates/day-$$(printf "%02d" $(day)) && cargo watch -x check -x test -s  "cat ../../inputs/day-$$(printf "%02d" $(day)).txt | cargo run --bin day-$$(printf "%02d" $(day))"

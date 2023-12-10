@@ -33,7 +33,7 @@ def main():
             )
 
     if new_cargo_toml_contents:
-        with open(CARGO_TOML_FILE_NEW, "w") as f:
+        with open(CARGO_TOML_FILE, "w") as f:
             f.write(new_cargo_toml_contents)
 
 

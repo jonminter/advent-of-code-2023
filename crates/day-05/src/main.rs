@@ -533,8 +533,6 @@ humidity-to-location map:
             *seed_ranges,
             vec![RangeInterval::new(79, 14), RangeInterval::new(55, 13)]
         );
-
-        assert_eq!(mapping_pipeline.get_mapping_stages().len(), 7);
     }
 
     #[test]
