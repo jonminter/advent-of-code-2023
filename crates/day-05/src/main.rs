@@ -1,83 +1,211 @@
+use std::time::SystemTime;
+
 use day5::parse::parse_input_into_mappings;
 
 mod day5 {
     pub(crate) mod types {
-        use std::ops::Deref;
+        #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone)]
+        pub(crate) struct RangeInterval(u64, u64);
+        impl RangeInterval {
+            pub(crate) fn new(start: u64, end: u64) -> Self {
+                Self(start, end)
+            }
 
-        pub(crate) struct MappingForRange {
-            dest_range_start: u64,
-            source_range_start: u64,
-            range_length: usize,
+            pub(crate) fn start(&self) -> u64 {
+                self.0
+            }
+
+            pub(crate) fn end(&self) -> u64 {
+                self.1
+            }
+
+            pub(crate) fn intersect(&self, other: &Self) -> Option<Self> {
+                let start = self.start().max(other.start());
+                let end = self.end().min(other.end());
+                if start < end {
+                    Some(Self(start, end))
+                } else {
+                    None
+                }
+            }
         }
-        impl MappingForRange {
+
+        #[cfg(test)]
+        mod test_range_interval {
+            #[test]
+            fn test_range_intersect() {
+                use super::RangeInterval;
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(5, 15)),
+                    Some(RangeInterval::new(5, 10))
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(10, 15)),
+                    None
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(15, 20)),
+                    None
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(0, 5)),
+                    Some(RangeInterval::new(0, 5))
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(0, 10)),
+                    Some(RangeInterval::new(0, 10))
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(0, 15)),
+                    Some(RangeInterval::new(0, 10))
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(5, 10)),
+                    Some(RangeInterval::new(5, 10))
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(5, 5)),
+                    None
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(10, 10)),
+                    None
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(10, 15)),
+                    None
+                );
+                assert_eq!(
+                    RangeInterval::new(0, 10).intersect(&RangeInterval::new(15, 15)),
+                    None
+                );
+            }
+        }
+
+        #[derive(PartialEq, Eq, Debug, PartialOrd, Ord)]
+        pub(crate) struct RangeMapping {
+            source: RangeInterval,
+            dest: RangeInterval,
+        }
+
+        pub(super) struct UnmappedInput(Vec<RangeInterval>);
+
+        impl RangeMapping {
             pub(super) fn new(
                 dest_range_start: u64,
                 source_range_start: u64,
                 range_length: usize,
-            ) -> Self {
-                Self {
-                    dest_range_start,
-                    source_range_start,
-                    range_length,
-                }
-            }
-
-            pub(crate) fn map_source_to_dest(&self, source: u64) -> Option<u64> {
-                let max = self
-                    .source_range_start
-                    .checked_add(self.range_length as u64)
-                    .expect(
+            ) -> Result<Self, String> {
+                let dest_range_end = dest_range_start
+                    .checked_add(range_length as u64)
+                    .ok_or_else(|| {
                         format!(
-                            "BUG: overflow {} + {}",
-                            self.source_range_start, self.range_length
+                            "Dest range start {} + range length {} overflows",
+                            dest_range_start, range_length
                         )
-                        .as_str(),
-                    );
-                if source < self.source_range_start || source >= max {
-                    return None;
-                }
+                        .to_string()
+                    })?;
 
-                let offset = source - self.source_range_start;
-                let dest = self
-                    .dest_range_start
-                    .checked_add(offset)
-                    .expect("BUG: overflow");
-                Some(dest)
+                let source_range_end = source_range_start
+                    .checked_add(range_length as u64)
+                    .ok_or_else(|| {
+                        format!(
+                            "Source range start {} + range length {} overflows",
+                            source_range_start, range_length
+                        )
+                        .to_string()
+                    })?;
+
+                Ok(Self {
+                    source: RangeInterval(source_range_start, source_range_end),
+                    dest: RangeInterval(dest_range_start, dest_range_end),
+                })
             }
 
-            pub(crate) fn dest_range_start(&self) -> u64 {
-                self.dest_range_start
-            }
+            pub(super) fn map_input_range(
+                &self,
+                input: &RangeInterval,
+            ) -> (Option<RangeInterval>, UnmappedInput) {
+                self.source
+                    .intersect(input)
+                    .map(|source_overlap| {
+                        let offset = source_overlap.start() - self.source.start();
+                        let output_len = source_overlap.end() - source_overlap.start();
 
-            pub(crate) fn source_range_start(&self) -> u64 {
-                self.source_range_start
+                        let mut unmapped_input = vec![];
+
+                        if input.start() < source_overlap.start() {
+                            unmapped_input
+                                .push(RangeInterval(input.start(), source_overlap.start()));
+                        }
+
+                        let mapped = RangeInterval(
+                            self.dest.start() + offset,
+                            self.dest.start() + offset + output_len,
+                        );
+
+                        if input.end() > source_overlap.end() {
+                            unmapped_input.push(RangeInterval(source_overlap.end(), input.end()));
+                        }
+                        (Some(mapped), UnmappedInput(unmapped_input))
+                    })
+                    .unwrap_or((None, UnmappedInput(vec![input.clone()])))
             }
         }
+
+        // Take last map, find range that has lowest destination start
 
         pub(crate) struct SourceToDestMap {
-            name: String,
-            ranges: Vec<MappingForRange>,
+            _name: String,
+            range_mappings: Vec<RangeMapping>,
         }
         impl SourceToDestMap {
-            pub(super) fn new(name: String, ranges: Vec<MappingForRange>) -> Self {
-                Self { name, ranges }
+            pub(super) fn new(
+                name: String,
+                mut range_mappings: Vec<RangeMapping>,
+            ) -> Result<Self, String> {
+                Self::check_for_overlapping_ranges(&mut range_mappings)?;
+                Ok(Self {
+                    _name: name,
+                    range_mappings,
+                })
             }
 
-            pub(crate) fn map_source_to_dest(&self, source: u64) -> u64 {
-                for range in &self.ranges {
-                    if let Some(dest) = range.map_source_to_dest(source) {
-                        return dest;
+            fn check_for_overlapping_ranges(ranges: &mut Vec<RangeMapping>) -> Result<(), String> {
+                ranges.sort();
+
+                let mut prev_range_end = 0;
+                for range in ranges {
+                    if range.source.start() < prev_range_end {
+                        return Err(format!(
+                            "Overlapping ranges: {:?} starts before last range end of {:?}",
+                            range, prev_range_end,
+                        ));
                     }
+                    prev_range_end = range.source.end();
                 }
-                source
+                Ok(())
             }
 
-            pub(crate) fn name(&self) -> &str {
-                &self.name
-            }
+            pub(crate) fn map_input_range(&self, input_range: RangeInterval) -> Vec<RangeInterval> {
+                let mut all_unmapped_input = vec![input_range];
 
-            pub(crate) fn ranges(&self) -> &[MappingForRange] {
-                &self.ranges
+                let mut mapped_output_ranges = vec![];
+
+                for mapping in self.range_mappings.iter() {
+                    let mut new_unmapped_input = vec![];
+                    for range_to_map in &all_unmapped_input {
+                        let (mapped_range, unmapped_input) = mapping.map_input_range(range_to_map);
+                        new_unmapped_input.extend(unmapped_input.0);
+
+                        if let Some(mapped_range) = mapped_range {
+                            mapped_output_ranges.push(mapped_range);
+                        }
+                    }
+                    all_unmapped_input = new_unmapped_input;
+                }
+                mapped_output_ranges.extend(all_unmapped_input);
+                mapped_output_ranges
             }
         }
 
@@ -89,65 +217,65 @@ mod day5 {
                 Self { mappings }
             }
 
-            pub(crate) fn get_final_mapping(&self, seeds: &[u64]) -> Vec<u64> {
-                let mut mapping = seeds.to_vec();
-                for map in &self.mappings {
-                    for (i, val) in mapping.iter_mut().enumerate() {
-                        *val = map.map_source_to_dest(*val);
+            fn merge_intervals(ranges: Vec<RangeInterval>) -> Vec<RangeInterval> {
+                let mut merged_ranges = vec![];
+                let mut prev_range = ranges[0].clone();
+                for range in ranges.into_iter().skip(1) {
+                    if range.intersect(&prev_range).is_some() {
+                        prev_range = RangeInterval(
+                            prev_range.start().min(range.start()),
+                            range.end().max(prev_range.end()),
+                        );
+                    } else {
+                        merged_ranges.push(prev_range);
+                        prev_range = range;
                     }
                 }
-                mapping
+                merged_ranges.push(prev_range);
+
+                merged_ranges
             }
 
-            pub(crate) fn get_mapping_stages(&self) -> &[SourceToDestMap] {
-                &self.mappings
+            pub(crate) fn get_lowest_final_mapping(
+                &self,
+                seeds: &[RangeInterval],
+            ) -> Result<u64, String> {
+                if seeds.is_empty() {
+                    return Err("No seed ranges provided".to_string());
+                }
+
+                let mut lowest = u64::MAX;
+
+                for seed_range in seeds {
+                    let mut curr_ranges = vec![seed_range.clone()];
+                    for mapping in self.mappings.iter() {
+                        let mut new_ranges = vec![];
+                        for curr_range in curr_ranges {
+                            new_ranges.extend(mapping.map_input_range(curr_range));
+                        }
+                        new_ranges = Self::merge_intervals(new_ranges);
+                        curr_ranges = new_ranges;
+                    }
+
+                    assert!(!curr_ranges.is_empty());
+                    lowest = lowest.min(curr_ranges.iter().map(|r| r.start()).min().unwrap());
+                }
+
+                Ok(lowest)
             }
         }
 
-        pub(crate) struct SeedNumbers(pub(super) Vec<u64>);
-        impl Deref for SeedNumbers {
-            type Target = Vec<u64>;
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
+        #[cfg(test)]
+        mod test {}
     }
 
     pub(crate) mod parse {
         use super::types::*;
         use std::{iter::Peekable, ops::Deref};
 
-        struct CharAt {
-            column: usize,
-            c: char,
-        }
-        impl From<CharAt> for char {
-            fn from(value: CharAt) -> Self {
-                value.c
-            }
-        }
-        impl Deref for CharAt {
-            type Target = char;
-            fn deref(&self) -> &Self::Target {
-                &self.c
-            }
-        }
-
-        fn line_char_iter(line: &str) -> Peekable<impl Iterator<Item = CharAt> + '_> {
-            line.chars()
-                .enumerate()
-                .map(|(col, c)| CharAt { column: col, c })
-                .peekable()
-        }
-
         struct InputLine {
             line_num: usize,
             line: String,
-        }
-        impl InputLine {
-            fn char_iter(&self) -> Peekable<impl Iterator<Item = CharAt> + '_> {
-                line_char_iter(&self.line)
-            }
         }
         impl Deref for InputLine {
             type Target = String;
@@ -173,10 +301,6 @@ mod day5 {
                 }
             }
 
-            fn last_line_read(&self) -> usize {
-                self.last_line_read.unwrap_or(0)
-            }
-
             fn peek(&mut self) -> Option<&InputLine> {
                 self.iter.peek()
             }
@@ -194,22 +318,9 @@ mod day5 {
             }
         }
 
-        fn get_error_msg_with_col(col_num: usize, msg: &str) -> String {
-            format!("COL {}: {}", col_num, msg)
-        }
-
-        fn get_parse_col(
-            char_iter: &mut Peekable<impl Iterator<Item = CharAt>>,
-        ) -> Result<usize, String> {
-            char_iter
-                .peek()
-                .map(|c| c.column)
-                .ok_or("Empty line while getting parse col".to_string())
-        }
-
         fn try_consume_list_of_numbers(number_list_str: &str) -> Result<Vec<u64>, String> {
             let numbers = number_list_str
-                .split(" ")
+                .split(' ')
                 .map(|s| s.parse::<u64>().map_err(|e| e.to_string()))
                 .collect::<Result<Vec<_>, String>>()?;
             Ok(numbers)
@@ -251,7 +362,7 @@ mod day5 {
             Ok(line.strip_suffix(" map:").unwrap().to_string())
         }
 
-        fn parse_mapping_range(lines: &mut InputLines) -> Result<Option<MappingForRange>, String> {
+        fn parse_mapping_range(lines: &mut InputLines) -> Result<Option<RangeMapping>, String> {
             let maybe_line = lines.next();
             if maybe_line.is_none() {
                 return Ok(None);
@@ -272,11 +383,11 @@ mod day5 {
                 ));
             }
 
-            Ok(Some(MappingForRange::new(
+            Ok(Some(RangeMapping::new(
                 range_numbers[0],
                 range_numbers[1],
                 range_numbers[2] as usize,
-            )))
+            )?))
         }
 
         fn parse_maps(lines: &mut InputLines) -> Result<Vec<SourceToDestMap>, String> {
@@ -293,7 +404,7 @@ mod day5 {
                     }
                 }
 
-                maps.push(SourceToDestMap::new(map_name, map_ranges));
+                maps.push(SourceToDestMap::new(map_name, map_ranges)?);
 
                 if lines.peek().is_none() {
                     break;
@@ -305,7 +416,7 @@ mod day5 {
 
         pub(crate) fn parse_input_into_mappings<'a>(
             lines: impl Iterator<Item = String> + 'a,
-        ) -> Result<(SeedNumbers, MappingPipeline), String> {
+        ) -> Result<(Vec<RangeInterval>, MappingPipeline), String> {
             let mut lines = InputLines::new(lines);
 
             let line = lines
@@ -323,17 +434,35 @@ mod day5 {
 
             let seed_numbers = try_consume_list_of_numbers(number_list_str)
                 .map_err(|e| get_error_msg_with_line(line.line_num, &e))?;
+            if seed_numbers.len() % 2 != 0 {
+                return Err(get_error_msg_with_line(
+                    line.line_num,
+                    &format!(
+                        "Expected even number of seed numbers, got {}",
+                        seed_numbers.len()
+                    ),
+                ));
+            }
+            let seed_ranges = seed_numbers
+                .as_slice()
+                .chunks(2)
+                .map(|start_and_end| {
+                    RangeInterval::new(start_and_end[0], start_and_end[0] + start_and_end[1])
+                })
+                .collect();
 
             try_consume_empty_line(&mut lines)?;
 
             let maps = parse_maps(&mut lines)?;
 
-            Ok((SeedNumbers(seed_numbers), MappingPipeline::new(maps)))
+            Ok((seed_ranges, MappingPipeline::new(maps)))
         }
     }
 }
 
 fn main() {
+    let start_time = SystemTime::now();
+
     println!("Parsing input...");
     let mut input = std::io::stdin()
         .lines()
@@ -343,17 +472,23 @@ fn main() {
         parse_input_into_mappings(&mut input).expect("Failed to parse input");
 
     println!("Calculating final mappings...");
-    let final_mapping = mappings.get_final_mapping(&seed_numbers);
+    let final_mapping = mappings.get_lowest_final_mapping(&seed_numbers);
+    let end_time = SystemTime::now();
+    let calc_duration = end_time.duration_since(start_time).unwrap();
 
     println!(
-        "Lowest final mapping: {:?}",
-        final_mapping.iter().min().unwrap()
+        "Lowest final mapping: {:?}; found in {:?}s and {:}ms",
+        final_mapping.iter().min().unwrap(),
+        calc_duration.as_secs(),
+        calc_duration.subsec_millis()
     );
 }
 
 #[cfg(test)]
 mod test {
-    use crate::day5::parse::parse_input_into_mappings;
+    use std::time::SystemTime;
+
+    use crate::day5::{parse::parse_input_into_mappings, types::RangeInterval};
 
     const TEST_INPUT: &str = r#"seeds: 79 14 55 13
 
@@ -392,9 +527,12 @@ humidity-to-location map:
     #[test]
     fn test_parses_mappings() {
         let line_iter = TEST_INPUT.split("\n").map(|s| s.to_string());
-        let (seed_numbers, mapping_pipeline) = parse_input_into_mappings(line_iter).unwrap();
+        let (seed_ranges, mapping_pipeline) = parse_input_into_mappings(line_iter).unwrap();
 
-        assert_eq!(*seed_numbers, vec![79, 14, 55, 13]);
+        assert_eq!(
+            *seed_ranges,
+            vec![RangeInterval::new(79, 14), RangeInterval::new(55, 13)]
+        );
 
         assert_eq!(mapping_pipeline.get_mapping_stages().len(), 7);
     }
@@ -404,7 +542,11 @@ humidity-to-location map:
         let line_iter = TEST_INPUT.split("\n").map(|s| s.to_string());
         let (seed_numbers, mapping_pipeline) = parse_input_into_mappings(line_iter).unwrap();
 
-        let final_mapping = mapping_pipeline.get_final_mapping(&seed_numbers);
-        assert_eq!(final_mapping, vec![82, 43, 86, 35]);
+        println!("Seed numbers: {:?}", seed_numbers);
+
+        let final_mapping = mapping_pipeline
+            .get_lowest_final_mapping(&seed_numbers)
+            .unwrap();
+        assert_eq!(final_mapping, 46);
     }
 }
