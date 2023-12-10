@@ -1,16 +1,16 @@
 #[derive(Debug, PartialEq)]
 pub(crate) struct RaceResult {
-    time: u32,
-    record_distance: u32,
+    time: u64,
+    record_distance: u64,
 }
 impl RaceResult {
-    pub(crate) fn new(time: u32, record_distance: u32) -> Self {
+    pub(crate) fn new(time: u64, record_distance: u64) -> Self {
         Self {
             time,
             record_distance,
         }
     }
-    pub(crate) fn ways_to_beat_record_distance(&self) -> u32 {
+    pub(crate) fn ways_to_beat_record_distance(&self) -> u64 {
         let min_button_hold = 1;
         let max_button_hold = self.time - 1;
 
@@ -27,57 +27,42 @@ impl RaceResult {
     }
 }
 
-pub(crate) fn total_ways_to_win(race_results: &[RaceResult]) -> u32 {
-    race_results
-        .iter()
-        .map(|rr| rr.ways_to_beat_record_distance())
-        .product()
-}
-
 pub(crate) fn parse_race_results(
     mut lines: impl Iterator<Item = String>,
-) -> Result<Vec<RaceResult>, String> {
-    let times_line = lines.next().ok_or_else(|| "Expected times line")?;
+) -> Result<RaceResult, String> {
+    let times_line = lines.next().ok_or("Expected times line")?;
 
-    let times = times_line.split_ascii_whitespace().skip(1).map(|time_str| {
-        time_str
-            .parse::<u32>()
-            .map_err(|e| format!("Failed to parse time '{}': {}", time_str, e))
-    });
-
-    let distances_line = lines.next().ok_or_else(|| "Expected distances line")?;
-
-    let distances = distances_line
+    let time = times_line
         .split_ascii_whitespace()
         .skip(1)
-        .map(|distance_str| {
-            distance_str
-                .parse::<u32>()
-                .map_err(|e| format!("Failed to parse distance '{}': {}", distance_str, e))
-        });
+        .collect::<Vec<_>>()
+        .join("")
+        .parse::<u64>()
+        .map_err(|e| format!("Failed to parse time '{}': {}", times_line, e))?;
 
-    let race_results = times
-        .zip(distances)
-        .map(|(time, distance)| {
-            time.and_then(|time| {
-                distance.map(|distance| RaceResult {
-                    time,
-                    record_distance: distance,
-                })
-            })
-        })
-        .collect::<Result<Vec<RaceResult>, String>>()?;
+    let distances_line = lines.next().ok_or("Expected distances line")?;
 
-    Ok(race_results)
+    let distance = distances_line
+        .split_ascii_whitespace()
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join("")
+        .parse::<u64>()
+        .map_err(|e| format!("Failed to parse distance '{}': {}", distances_line, e))?;
+
+    Ok(RaceResult::new(time, distance))
 }
 
 fn main() {
-    let mut input = std::io::stdin()
+    let input = std::io::stdin()
         .lines()
         .map(|s| s.expect("Failed to read line"));
 
-    let race_results = parse_race_results(input).expect("Failed parsing input!");
-    println!("Total ways to win: {}", total_ways_to_win(&race_results));
+    let race_result = parse_race_results(input).expect("Failed parsing input!");
+    println!(
+        "Total ways to win: {}",
+        race_result.ways_to_beat_record_distance()
+    );
 }
 
 #[cfg(test)]
@@ -89,11 +74,7 @@ Distance:  9  40  200"#;
 
     #[test]
     fn test_parse() {
-        let expected_results = vec![
-            RaceResult::new(7, 9),
-            RaceResult::new(15, 40),
-            RaceResult::new(30, 200),
-        ];
+        let expected_results = RaceResult::new(71530, 940200);
 
         assert_eq!(
             parse_race_results(TEST_INPUT.split("\n").into_iter().map(|s| s.to_string())).unwrap(),
@@ -103,9 +84,9 @@ Distance:  9  40  200"#;
 
     #[test]
     fn test_ways_to_win() {
-        let race_results =
+        let race_result =
             parse_race_results(TEST_INPUT.split("\n").into_iter().map(|s| s.to_string())).unwrap();
 
-        assert_eq!(super::total_ways_to_win(&race_results), 288);
+        assert_eq!(race_result.ways_to_beat_record_distance(), 71503);
     }
 }
