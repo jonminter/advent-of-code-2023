@@ -1,134 +1,102 @@
 mod card_types {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
-    #[derive(PartialEq, Eq, Debug, Ord, PartialOrd)]
-    pub(crate) struct Card {
-        rank: u8,
-        label: char,
+    #[derive(PartialEq, Eq, Debug, Hash, Clone)]
+    pub(crate) enum Card {
+        Ace,
+        King,
+        Queen,
+        Joker,
+        Tee,
+        Number(u8),
     }
+    impl Ord for Card {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            self.rank().cmp(&other.rank())
+        }
+    }
+    impl PartialOrd for Card {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.rank().cmp(&other.rank()))
+        }
+    }
+
     impl Card {
         pub(crate) fn new(label: char) -> Result<Self, String> {
             match label {
-                'A' => Ok(Self { label, rank: 14 }),
-                'K' => Ok(Self { label, rank: 13 }),
-                'Q' => Ok(Self { label, rank: 12 }),
-                'J' => Ok(Self { label, rank: 11 }),
-                'T' => Ok(Self { label, rank: 10 }),
+                'A' => Ok(Card::Ace),
+                'K' => Ok(Card::King),
+                'Q' => Ok(Card::Queen),
+                'J' => Ok(Card::Joker),
+                'T' => Ok(Card::Tee),
                 _ => {
-                    let rank = label
+                    let card_number = label
                         .to_digit(10)
                         .ok_or_else(|| format!("Failed to parse card label '{}': char was not A,K,Q,J or T so expected a digit", label))?;
-                    if !(2..=9).contains(&rank) {
+                    if !(2..=9).contains(&card_number) {
                         return Err(format!("Invalid card label '{}'", label));
                     }
-                    Ok(Self {
-                        label,
-                        rank: rank as u8,
-                    })
+                    Ok(Card::Number(card_number as u8))
                 }
+            }
+        }
+
+        pub(crate) fn rank(&self) -> u8 {
+            match self {
+                Self::Ace => 14,
+                Self::King => 13,
+                Self::Queen => 12,
+                Self::Joker => 1,
+                Self::Tee => 10,
+                Self::Number(rank) => *rank,
             }
         }
     }
 
-    fn hand_type_rank(hand_type: &HandType) -> u8 {
+    fn hand_type_rank(hand_type: &Hand) -> u8 {
         match hand_type {
-            HandType::FiveOfAKind => 0,
-            HandType::FourOfAKind => 1,
-            HandType::FullHouse => 2,
-            HandType::ThreeOfAKind => 3,
-            HandType::TwoPair => 4,
-            HandType::OnePair => 5,
-            HandType::HighCard => 6,
+            Hand::FiveOfAKind(_, _) => 0,
+            Hand::FourOfAKind(_, _) => 1,
+            Hand::FullHouse(_, _) => 2,
+            Hand::ThreeOfAKind(_, _) => 3,
+            Hand::TwoPair(_, _) => 4,
+            Hand::OnePair(_, _) => 5,
+            Hand::HighCard(_, _) => 6,
         }
     }
 
-    #[derive(PartialEq, Eq, Debug)]
-    pub(crate) enum HandType {
-        FiveOfAKind,
-        FourOfAKind,
-        FullHouse,
-        ThreeOfAKind,
-        TwoPair,
-        OnePair,
-        HighCard,
-    }
-    impl PartialOrd for HandType {
-        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-            Some(hand_type_rank(self).cmp(&hand_type_rank(other)))
-        }
-    }
-    impl Ord for HandType {
-        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-            hand_type_rank(self).cmp(&hand_type_rank(other))
-        }
-    }
-
-    #[derive(PartialEq, Eq, Debug)]
-    pub(crate) struct Hand {
-        hand_type: HandType,
-        cards: Vec<Card>,
-        bid: u32,
+    #[derive(PartialEq, Eq, Debug, Clone)]
+    pub(crate) enum Hand {
+        FiveOfAKind(Vec<Card>, u32),
+        FourOfAKind(Vec<Card>, u32),
+        FullHouse(Vec<Card>, u32),
+        ThreeOfAKind(Vec<Card>, u32),
+        TwoPair(Vec<Card>, u32),
+        OnePair(Vec<Card>, u32),
+        HighCard(Vec<Card>, u32),
     }
     impl Hand {
-        pub(crate) fn new(cards: Vec<Card>, bid: u32) -> Result<Self, String> {
-            if cards.len() != 5 {
-                return Err(format!("Expected 5 cards, got {}", cards.len()));
-            }
-
-            Ok(Self {
-                hand_type: Self::determine_hand_type(cards.as_slice()),
-                cards,
-                bid,
-            })
-        }
-
         pub(crate) fn bid(&self) -> u32 {
-            self.bid
+            match self {
+                Hand::FiveOfAKind(_, bid) => *bid,
+                Hand::FourOfAKind(_, bid) => *bid,
+                Hand::FullHouse(_, bid) => *bid,
+                Hand::ThreeOfAKind(_, bid) => *bid,
+                Hand::TwoPair(_, bid) => *bid,
+                Hand::OnePair(_, bid) => *bid,
+                Hand::HighCard(_, bid) => *bid,
+            }
         }
 
-        fn determine_hand_type(cards: &[Card]) -> HandType {
-            let mut hand_kind_counts = HashMap::new();
-            for card in cards {
-                let count = hand_kind_counts.entry(card.rank).or_insert(0);
-                *count += 1;
-            }
-
-            let mut hand_kind_counts = hand_kind_counts.iter().collect::<Vec<_>>();
-            hand_kind_counts
-                .sort_by(|(_, a_kind_count), (_, b_kind_count)| b_kind_count.cmp(a_kind_count));
-
-            let max_count = hand_kind_counts[0].1;
-
-            if *max_count == 5 {
-                HandType::FiveOfAKind
-            } else if *max_count == 4 {
-                HandType::FourOfAKind
-            } else if *max_count == 3 {
-                assert!(
-                    hand_kind_counts.len() >= 2,
-                    "Expected at least 2 hand kinds since we have at least 3 of a kind"
-                );
-                let second_max_count = hand_kind_counts[1].1;
-
-                if *second_max_count == 2 {
-                    HandType::FullHouse
-                } else {
-                    HandType::ThreeOfAKind
-                }
-            } else if *max_count == 2 {
-                assert!(
-                    hand_kind_counts.len() >= 2,
-                    "Expected at least 2 hand kinds since we have at least one pair"
-                );
-                let second_max_count = hand_kind_counts[1].1;
-
-                if *second_max_count == 2 {
-                    HandType::TwoPair
-                } else {
-                    HandType::OnePair
-                }
-            } else {
-                HandType::HighCard
+        fn cards(&self) -> &Vec<Card> {
+            match self {
+                Hand::FiveOfAKind(cards, _) => cards,
+                Hand::FourOfAKind(cards, _) => cards,
+                Hand::FullHouse(cards, _) => cards,
+                Hand::ThreeOfAKind(cards, _) => cards,
+                Hand::TwoPair(cards, _) => cards,
+                Hand::OnePair(cards, _) => cards,
+                Hand::HighCard(cards, _) => cards,
             }
         }
     }
@@ -139,11 +107,90 @@ mod card_types {
     }
     impl Ord for Hand {
         fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-            if self.hand_type == other.hand_type {
-                other.cards.cmp(&self.cards)
-            } else {
-                self.hand_type.cmp(&other.hand_type)
+            match hand_type_rank(self).cmp(&hand_type_rank(other)) {
+                std::cmp::Ordering::Equal => other.cards().cmp(self.cards()),
+                ordering => ordering,
             }
+        }
+    }
+
+    impl Hand {
+        fn hand_from_cards(
+            actual_cards: Vec<Card>,
+            maybe_jokers_replaced: Option<&Vec<Card>>,
+            bid: u32,
+        ) -> Hand {
+            let cards_to_determine_type = maybe_jokers_replaced.unwrap_or(&actual_cards);
+            assert!(cards_to_determine_type.len() == 5);
+
+            let mut hand_kind_counts = HashMap::new();
+            for card in cards_to_determine_type {
+                let count = hand_kind_counts.entry(card).or_insert(0);
+                *count += 1;
+            }
+
+            let mut hand_kind_counts = hand_kind_counts.iter().collect::<Vec<_>>();
+            hand_kind_counts
+                .sort_by(|(_, a_kind_count), (_, b_kind_count)| a_kind_count.cmp(b_kind_count));
+
+            let max_count: u32 = *hand_kind_counts.pop().map(|(_, count)| count).unwrap();
+            let second_most_count: Option<u32> = hand_kind_counts.pop().map(|(_, count)| *count);
+
+            match (max_count, second_most_count) {
+                (5, _) => Hand::FiveOfAKind(actual_cards, bid),
+                (4, _) => Hand::FourOfAKind(actual_cards, bid),
+                (3, Some(2)) => Hand::FullHouse(actual_cards, bid),
+                (3, _) => Hand::ThreeOfAKind(actual_cards, bid),
+                (2, Some(2)) => Hand::TwoPair(actual_cards, bid),
+                (2, _) => Hand::OnePair(actual_cards, bid),
+                _ => Hand::HighCard(actual_cards, bid),
+            }
+        }
+
+        fn find_max_hand_with_joker_sub(cards: &[Card], bid: u32) -> Hand {
+            let num_jokers = cards.iter().filter(|c| **c == Card::Joker).count();
+
+            let orig_cards = cards.to_vec();
+            let orig_hand = Hand::hand_from_cards(orig_cards.clone(), None, bid);
+            let mut hand = orig_hand.clone();
+
+            if num_jokers == 0 {
+                return hand;
+            }
+            let other_card_types = cards
+                .iter()
+                .filter(|c| **c != Card::Joker)
+                .clone()
+                .collect::<HashSet<_>>();
+
+            for card_to_replace_with_joker in other_card_types {
+                let new_cards = cards
+                    .iter()
+                    .map(|c| {
+                        if *c == Card::Joker {
+                            card_to_replace_with_joker
+                        } else {
+                            c
+                        }
+                    })
+                    .cloned()
+                    .collect();
+                let new_hand = Hand::hand_from_cards(orig_cards.clone(), Some(&new_cards), bid);
+
+                if new_hand < hand {
+                    hand = new_hand;
+                }
+            }
+
+            hand
+        }
+
+        pub(crate) fn new(cards: &[Card], bid: u32) -> Result<Self, String> {
+            if cards.len() != 5 {
+                return Err(format!("Expected 5 cards, got {}", cards.len()));
+            }
+
+            Ok(Self::find_max_hand_with_joker_sub(cards, bid))
         }
     }
 }
@@ -165,7 +212,7 @@ mod parse {
             .parse::<u32>()
             .map_err(|e| format!("Failed to parse bid '{}': {}", bid_str, e))?;
 
-        Hand::new(cards, bid)
+        Hand::new(&cards, bid)
     }
 }
 
@@ -201,7 +248,7 @@ QQQJA 483"#;
 
     #[test]
     fn test_parse() {
-        let mut hands = TEST_INPUT
+        let hands = TEST_INPUT
             .lines()
             .map(|line| crate::parse::parse_hand_line(line))
             .collect::<Result<Vec<_>, _>>()
@@ -209,7 +256,7 @@ QQQJA 483"#;
 
         let expected_hands = [
             Hand::new(
-                vec![
+                &vec![
                     Card::new('3').unwrap(),
                     Card::new('2').unwrap(),
                     Card::new('T').unwrap(),
@@ -220,7 +267,7 @@ QQQJA 483"#;
             )
             .unwrap(),
             Hand::new(
-                vec![
+                &vec![
                     Card::new('T').unwrap(),
                     Card::new('5').unwrap(),
                     Card::new('5').unwrap(),
@@ -231,7 +278,7 @@ QQQJA 483"#;
             )
             .unwrap(),
             Hand::new(
-                vec![
+                &vec![
                     Card::new('K').unwrap(),
                     Card::new('K').unwrap(),
                     Card::new('6').unwrap(),
@@ -242,7 +289,7 @@ QQQJA 483"#;
             )
             .unwrap(),
             Hand::new(
-                vec![
+                &vec![
                     Card::new('K').unwrap(),
                     Card::new('T').unwrap(),
                     Card::new('J').unwrap(),
@@ -253,7 +300,7 @@ QQQJA 483"#;
             )
             .unwrap(),
             Hand::new(
-                vec![
+                &vec![
                     Card::new('Q').unwrap(),
                     Card::new('Q').unwrap(),
                     Card::new('Q').unwrap(),
@@ -269,42 +316,13 @@ QQQJA 483"#;
     }
 
     #[test]
-    fn test_orders_hand_kinds_correctly() {
-        let hands = [
-            Hand::new(
-                vec![
-                    Card::new('A').unwrap(),
-                    Card::new('A').unwrap(),
-                    Card::new('A').unwrap(),
-                    Card::new('K').unwrap(),
-                    Card::new('K').unwrap(),
-                ],
-                765,
-            ),
-            Hand::new(
-                vec![
-                    Card::new('A').unwrap(),
-                    Card::new('A').unwrap(),
-                    Card::new('A').unwrap(),
-                    Card::new('2').unwrap(),
-                    Card::new('J').unwrap(),
-                ],
-                1,
-            ),
-        ];
-        println!("{:?}", hands);
-
-        assert!(hands[0] < hands[1]);
-    }
-
-    #[test]
     fn test_total_winnings() {
-        let mut hands = TEST_INPUT
+        let hands = TEST_INPUT
             .lines()
             .map(|line| crate::parse::parse_hand_line(line))
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 
-        assert_eq!(super::get_total_winnings(hands), 6440);
+        assert_eq!(super::get_total_winnings(hands), 5905);
     }
 }
