@@ -221,15 +221,17 @@ mod day5 {
                 let mut merged_ranges = vec![];
                 let mut prev_range = ranges[0].clone();
                 for range in ranges.into_iter().skip(1) {
-                    if range.intersect(&prev_range).is_some() {
-                        prev_range = RangeInterval(
+                    let intersects = range.intersect(&prev_range);
+                    prev_range = match intersects {
+                        Some(_) => RangeInterval(
                             prev_range.start().min(range.start()),
                             range.end().max(prev_range.end()),
-                        );
-                    } else {
-                        merged_ranges.push(prev_range);
-                        prev_range = range;
-                    }
+                        ),
+                        None => {
+                            merged_ranges.push(prev_range);
+                            range
+                        }
+                    };
                 }
                 merged_ranges.push(prev_range);
 

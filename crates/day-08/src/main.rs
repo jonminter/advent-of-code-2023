@@ -40,6 +40,46 @@ mod network {
 
     #[derive(Debug, PartialEq, Eq)]
     pub(crate) struct Network(HashMap<String, NetworkNodeEdges>);
+    struct NetworkTraversalIter<'a, 'b> {
+        curr_node: &'a str,
+        instructions_iter: std::slice::Iter<'b, TraverseDir>,
+        instructions: &'b [TraverseDir],
+        network: &'a Network,
+    }
+    impl<'a, 'b> NetworkTraversalIter<'a, 'b> {
+        fn new(network: &'a Network, curr_node: &'a str, instructions: &'b [TraverseDir]) -> Self {
+            let instructions_iter = instructions.iter();
+            Self {
+                network,
+                curr_node,
+                instructions,
+                instructions_iter,
+            }
+        }
+    }
+
+    impl<'a, 'b> Iterator for NetworkTraversalIter<'a, 'b> {
+        type Item = &'a str;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            loop {
+                let maybe_next_dir = self.instructions_iter.next();
+                let maybe_edges = self.network.get_node_with_label(self.curr_node);
+
+                match (maybe_next_dir, maybe_edges) {
+                    (Some(next_dir), Some(edges)) => {
+                        self.curr_node = edges.get_next_node(next_dir);
+                        break;
+                    }
+                    (_, None) => panic!("BUG: Could not find node in graph!"),
+                    (None, _) => self.instructions_iter = self.instructions.iter(),
+                }
+            }
+
+            Some(self.curr_node)
+        }
+    }
+
     impl Network {
         pub(crate) fn new(graph: HashMap<String, NetworkNodeEdges>) -> Self {
             Self(graph)
@@ -55,27 +95,17 @@ mod network {
             terminal_node: &str,
             instructions: Vec<TraverseDir>,
         ) -> Option<u32> {
-            let mut instructions_iter = instructions.iter();
+            let traversal_iter = NetworkTraversalIter::new(self, start_node, &instructions);
 
-            let mut curr_node = start_node;
             let mut num_steps = 0;
-            loop {
+            for curr_node in traversal_iter {
+                num_steps += 1;
                 if curr_node == terminal_node {
                     return Some(num_steps);
                 }
-
-                let maybe_next_dir = instructions_iter.next();
-                let maybe_edges = self.get_node_with_label(curr_node);
-
-                match (maybe_next_dir, maybe_edges) {
-                    (Some(next_dir), Some(edges)) => {
-                        num_steps += 1;
-                        curr_node = edges.get_next_node(next_dir);
-                    }
-                    (_, None) => panic!("BUG: Could not find node in graph!"),
-                    (None, _) => instructions_iter = instructions.iter(),
-                }
             }
+
+            panic!("BUG: Did not terminate!")
         }
     }
 }
