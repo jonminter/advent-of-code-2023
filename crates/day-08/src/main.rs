@@ -1,7 +1,7 @@
 mod network {
     use std::collections::HashMap;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, PartialEq, Eq, Hash)]
     pub(crate) enum TraverseDir {
         Left,
         Right,
@@ -38,47 +38,26 @@ mod network {
         }
     }
 
+    fn gcd(a: usize, b: usize) -> usize {
+        let mut dividend = a.max(b);
+        let mut divisor = a.min(b);
+
+        loop {
+            let rem = dividend % divisor;
+            if rem == 0 {
+                break divisor;
+            }
+            dividend = divisor;
+            divisor = rem;
+        }
+    }
+
+    fn lcm(a: usize, b: usize) -> usize {
+        (a * b) / gcd(a, b)
+    }
+
     #[derive(Debug, PartialEq, Eq)]
     pub(crate) struct Network(HashMap<String, NetworkNodeEdges>);
-    struct NetworkTraversalIter<'a, 'b> {
-        curr_node: &'a str,
-        instructions_iter: std::slice::Iter<'b, TraverseDir>,
-        instructions: &'b [TraverseDir],
-        network: &'a Network,
-    }
-    impl<'a, 'b> NetworkTraversalIter<'a, 'b> {
-        fn new(network: &'a Network, curr_node: &'a str, instructions: &'b [TraverseDir]) -> Self {
-            let instructions_iter = instructions.iter();
-            Self {
-                network,
-                curr_node,
-                instructions,
-                instructions_iter,
-            }
-        }
-    }
-
-    impl<'a, 'b> Iterator for NetworkTraversalIter<'a, 'b> {
-        type Item = &'a str;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            loop {
-                let maybe_next_dir = self.instructions_iter.next();
-                let maybe_edges = self.network.get_node_with_label(self.curr_node);
-
-                match (maybe_next_dir, maybe_edges) {
-                    (Some(next_dir), Some(edges)) => {
-                        self.curr_node = edges.get_next_node(next_dir);
-                        break;
-                    }
-                    (_, None) => panic!("BUG: Could not find node in graph!"),
-                    (None, _) => self.instructions_iter = self.instructions.iter(),
-                }
-            }
-
-            Some(self.curr_node)
-        }
-    }
 
     impl Network {
         pub(crate) fn new(graph: HashMap<String, NetworkNodeEdges>) -> Self {
@@ -89,23 +68,39 @@ mod network {
             self.0.get(label)
         }
 
-        pub(crate) fn num_steps_to_terminal_node(
-            &self,
-            start_node: &str,
-            terminal_node: &str,
-            instructions: Vec<TraverseDir>,
-        ) -> Option<u32> {
-            let traversal_iter = NetworkTraversalIter::new(self, start_node, &instructions);
+        fn get_all_nodes_ending_in(&self, c: char) -> impl Iterator<Item = &String> {
+            self.0.keys().filter(move |n| n.ends_with(c))
+        }
 
+        fn find_num_steps_till_z(&self, start_node: &str, instructions: &[TraverseDir]) -> usize {
+            let mut instructions_iter = instructions.iter().cycle();
             let mut num_steps = 0;
-            for curr_node in traversal_iter {
-                num_steps += 1;
-                if curr_node == terminal_node {
-                    return Some(num_steps);
-                }
-            }
+            let mut curr_node = start_node;
 
-            panic!("BUG: Did not terminate!")
+            loop {
+                if curr_node.ends_with('Z') {
+                    break num_steps;
+                }
+                let next_dir = instructions_iter.next().unwrap();
+                curr_node = self
+                    .get_node_with_label(curr_node)
+                    .expect("BUG: Node should exist")
+                    .get_next_node(next_dir);
+                num_steps += 1;
+            }
+        }
+
+        pub(crate) fn num_steps_till_all_a_nodes_end_in_z(
+            &self,
+            instructions: &[TraverseDir],
+        ) -> usize {
+            self.get_all_nodes_ending_in('A')
+                .map(|n| self.find_num_steps_till_z(n, instructions))
+                .fold(1, |result, num_steps| lcm(num_steps, result))
+        }
+
+        pub(crate) fn num_steps_to_zzz(&self, instructions: &[TraverseDir]) -> usize {
+            self.find_num_steps_till_z("AAA", instructions)
         }
     }
 }
@@ -171,7 +166,8 @@ fn main() {
     let (network, instructions) =
         parse::parse_input_as_network_and_instructions(lines).expect("Failed parsing input");
 
-    let num_steps = network.num_steps_to_terminal_node("AAA", "ZZZ", instructions);
+    println!("Part 1 = {:?}", network.num_steps_to_zzz(&instructions));
+    let num_steps = network.num_steps_till_all_a_nodes_end_in_z(&instructions);
     println!("Num steps = {:?}", num_steps);
 }
 
@@ -187,7 +183,7 @@ mod test {
         input: &'static str,
         expected_network: network::Network,
         expected_instructions: Vec<TraverseDir>,
-        expected_steps: u32,
+        expected_steps: usize,
     }
     impl TestCase {
         fn line_iter(&self) -> impl Iterator<Item = String> {
@@ -268,11 +264,31 @@ ZZZ = (ZZZ, ZZZ)"#,
                 parse_input_as_network_and_instructions(test_case.line_iter()).unwrap();
 
             assert_eq!(
-                network
-                    .num_steps_to_terminal_node("AAA", "ZZZ", instructions)
-                    .unwrap(),
+                network.num_steps_to_zzz(&instructions),
                 test_case.expected_steps
             );
         }
+    }
+
+    #[test]
+    fn test_calculates_steps_multi_start_nodes() {
+        let test_input = r#"LR
+
+11A = (11B, XXX)
+11B = (XXX, 11Z)
+11Z = (11B, XXX)
+22A = (22B, XXX)
+22B = (22C, 22C)
+22C = (22Z, 22Z)
+22Z = (22B, 22B)
+XXX = (XXX, XXX)"#;
+
+        let (network, instructions) =
+            parse_input_as_network_and_instructions(test_input.split("\n").map(|l| l.to_string()))
+                .unwrap();
+
+        let steps = network.num_steps_till_all_a_nodes_end_in_z(&instructions);
+
+        assert_eq!(steps, 6);
     }
 }
